@@ -48,3 +48,10 @@ def test_mission_passed_needs_target_class_as_main_box():
     assert mission_passed([big_sock], target=7, input_size=320, min_area=0.15)
     assert not mission_passed([big_sock, big_shoe], target=7, input_size=320, min_area=0.15)  # 더 큰 게 신발
     assert not mission_passed([], target=7, input_size=320, min_area=0.15)
+
+
+def test_decode_clips_to_input_frame():
+    out = make_output([(0, 10, 100, 40, 20, 0, 0.9), (1, 315, 100, 20, 20, 0, 0.9)])
+    a, b = decode(out, conf=0.5)
+    assert a["x1"] == 0 and b["x2"] == 320
+    assert decode(out, conf=0.5, input_size=300)[1]["x2"] == 300

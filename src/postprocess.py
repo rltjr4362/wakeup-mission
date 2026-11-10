@@ -3,8 +3,8 @@
 import numpy as np
 
 
-def decode(output, conf=0.5):
-    """[1, 4+nc, N] → 신뢰도 conf 이상인 박스 목록 (각 위치에서 점수가 가장 높은 클래스 하나)."""
+def decode(output, conf=0.5, input_size=320):
+    """[1, 4+nc, N] → 신뢰도 conf 이상인 박스 목록 (각 위치에서 점수가 가장 높은 클래스 하나). 박스는 [0, input_size]로 자른다(ultralytics와 동일)."""
     o = output[0]
     scores = o[4:]                       # [nc, N]
     cls = scores.argmax(0)
@@ -12,8 +12,8 @@ def decode(output, conf=0.5):
     dets = []
     for i in np.where(best >= conf)[0]:
         cx, cy, w, h = o[:4, i]
-        dets.append(dict(x1=float(cx - w / 2), y1=float(cy - h / 2),
-                         x2=float(cx + w / 2), y2=float(cy + h / 2),
+        dets.append(dict(x1=float(np.clip(cx - w / 2, 0, input_size)), y1=float(np.clip(cy - h / 2, 0, input_size)),
+                         x2=float(np.clip(cx + w / 2, 0, input_size)), y2=float(np.clip(cy + h / 2, 0, input_size)),
                          score=float(best[i]), cls=int(cls[i])))
     return dets
 

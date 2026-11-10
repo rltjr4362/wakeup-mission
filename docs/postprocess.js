@@ -2,7 +2,8 @@
 // YOLO ONNX 출력 후처리. src/postprocess.py와 같은 동작.
 // 출력 배열 모양: [1, 4+nc, n] → data[c * n + i] 가 i번째 위치의 c번째 값
 
-export function decode(data, nc, n, conf) {
+export function decode(data, nc, n, conf, inputSize = 320) {
+  const clip = v => Math.min(inputSize, Math.max(0, v));
   const dets = [];
   for (let i = 0; i < n; i++) {
     let cls = 0, score = -1;
@@ -12,7 +13,7 @@ export function decode(data, nc, n, conf) {
     }
     if (score < conf) continue;
     const cx = data[i], cy = data[n + i], w = data[2 * n + i], h = data[3 * n + i];
-    dets.push({ x1: cx - w / 2, y1: cy - h / 2, x2: cx + w / 2, y2: cy + h / 2, score, cls });
+    dets.push({ x1: clip(cx - w / 2), y1: clip(cy - h / 2), x2: clip(cx + w / 2), y2: clip(cy + h / 2), score, cls });
   }
   return dets;
 }

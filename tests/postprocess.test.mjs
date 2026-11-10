@@ -53,3 +53,11 @@ test('Streak: 연속 시간만큼 채우면 1, 짧은 끊김은 봐주고 긴 �
   s.update(true, 1000);
   assert.equal(s.update(false, 1300), 0);     // 300ms 끊김 → 초기화
 });
+
+test('decode: 박스를 입력 범위 [0, 320]로 자르기', () => {
+  const data = makeOutput([[0, 10, 100, 40, 20, 0, 0.9], [1, 315, 100, 20, 20, 0, 0.9]]);
+  const [a, b] = decode(data, 3, 5, 0.5);
+  assert.equal(a.x1, 0);
+  assert.equal(b.x2, 320);
+  assert.equal(decode(data, 3, 5, 0.5, 300)[1].x2, 300);
+});
