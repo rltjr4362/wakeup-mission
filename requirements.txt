@@ -1,0 +1,11 @@
+ultralytics
+fiftyone
+onnx
+onnxruntime
+onnxslim
+pandas
+matplotlib
+pytest
+ipykernel
+nbformat
+nbconvert

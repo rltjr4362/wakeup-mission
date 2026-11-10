@@ -1,0 +1,8 @@
+.venv/
+data/
+runs/
+my_photos/
+*.pt
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
