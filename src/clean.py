@@ -217,7 +217,7 @@ def _np(t):
     return t.cpu().numpy() if hasattr(t, "cpu") else np.asarray(t)
 
 
-def mission_pass_rate(model, crops_df, crops_dir, conf=0.5, iou=0.45, min_area=0.15,
+def mission_pass_rate(model, crops_df, crops_dir, conf=0.5, iou=0.45, min_side=0.4,
                       imgsz=320, device="cpu", batch=32) -> pd.DataFrame:
     """잘라 둔 사진마다 웹앱과 같은 규칙(src.evaluate.mission_passed)으로 통과 여부.
     열: file, target, cls_key, passed, pred_key(주인공 박스 클래스, 없으면 '-'), score"""
@@ -234,9 +234,9 @@ def mission_pass_rate(model, crops_df, crops_dir, conf=0.5, iou=0.45, min_area=0
             dets = []
             for (x1, y1, x2, y2), s, k in zip(_np(b.xyxy), _np(b.conf), _np(b.cls)):
                 dets.append(dict(x1=float(x1), y1=float(y1), x2=float(x2), y2=float(y2), score=float(s), cls=int(k)))
-            main = pick_main(dets, imgsz, min_area)
+            main = pick_main(dets, imgsz, min_side)
             out.append(dict(file=r["file"], target=int(r["target"]), cls_key=r["cls_key"],
-                            passed=mission_passed(dets, int(r["target"]), imgsz, min_area),
+                            passed=mission_passed(dets, int(r["target"]), imgsz, min_side),
                             pred_key=C.KEYS[main["cls"]] if main else "-",
                             score=round(main["score"], 3) if main else None))
     return pd.DataFrame(out, columns=["file", "target", "cls_key", "passed", "pred_key", "score"])

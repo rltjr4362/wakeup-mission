@@ -276,10 +276,10 @@ mAP는 "사진 속 **모든** 박스를 찾았나"를 본다. 앱은 다르다. 
 
 1. 박스를 가운데에 두고, 박스의 긴 변이 정사각형의 60%가 되게 자른다 (`fill=0.6`, 사진 밖으로 나가면 안으로 밀기)
 2. 320×320으로 줄인다 (웹앱 입력 크기)
-3. 웹앱과 **같은 규칙**으로 판정: 신뢰도 0.5 · NMS 0.45 · 면적 15% 이상인 박스 중 가장 큰 것이 목표 클래스면 통과 (`E.mission_passed`)
+3. 웹앱과 **같은 규칙**으로 판정: 신뢰도 0.5 · NMS 0.45 · 긴 변이 틀의 40% 이상인 박스 중 면적이 가장 큰 것이 목표 클래스면 통과 (`E.mission_passed`)
 
-> 한계: 실제 폰 카메라 사진이 아니라 Open Images 사진을 자른 것이다. 가늘고 긴 물건(칫솔 · 문)은 긴 변이 60%여도
-> 면적이 15%에 못 미칠 수 있다 — 앱에서도 똑같이 그렇다.
+> 한계: 실제 폰 카메라 사진이 아니라 Open Images 사진을 자른 것이다. 판정은 박스 면적이 아니라 **긴 변**으로 하므로
+> 가늘고 긴 물건(칫솔 · 문)도 긴 변이 틀의 40%만 넘으면 인정된다.
 """)
 code("""
 crops = K.mission_crops(CLEAN_DIR, 'val', CROPS_DIR, fill=0.6, min_area=MIN_AREA, size=E.INPUT)   # 끝난 표시(done)가 있으면 다시 안 만듦
@@ -288,7 +288,7 @@ print('잘라 낸 사진:', len(crops), '장')
 pass_rows = {}
 for mn, model in models.items():
     pass_rows[mn] = K.mission_pass_rate(model, crops, CROPS_DIR, conf=E.CONF, iou=E.IOU,
-                                        min_area=E.MIN_AREA, imgsz=E.INPUT, device=DEVICE)
+                                        min_side=E.MIN_SIDE, imgsz=E.INPUT, device=DEVICE)
 
 pass_table = pd.DataFrame({'클래스': [c.ko for c in C.CLASSES] + ['전체']}, index=C.KEYS + ['전체'])
 for mn, df in pass_rows.items():
@@ -299,7 +299,7 @@ pass_table['C-A'] = pass_table['C 통과율'] - pass_table['A 통과율']
 pass_table.round(2)
 """)
 code("""
-# 못 통과한 사진은 무엇으로 잡혔나? ('-' = 신뢰도 0.5 이상 · 면적 15% 이상인 박스가 없음)
+# 못 통과한 사진은 무엇으로 잡혔나? ('-' = 신뢰도 0.5 이상 · 긴 변이 틀의 40% 이상인 박스가 없음)
 for mn, df in pass_rows.items():
     print(f'모델 {mn}: 정답(줄) × 잡힌 것(칸)')
     display(pd.crosstab(df['cls_key'], df['pred_key']).reindex(C.KEYS))

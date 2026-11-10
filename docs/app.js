@@ -3,7 +3,7 @@ import { CLASSES } from './classes.js';
 import { decode, nms, pickMain, scanCrop, Streak } from './postprocess.js';
 
 // ── 설정 (src/evaluate.py와 같은 값) ──
-const INPUT = 320, CONF = 0.5, IOU = 0.45, MIN_AREA = 0.15, SCAN_RATIO = 0.7;
+const INPUT = 320, CONF = 0.5, IOU = 0.45, MIN_SIDE = 0.4, SCAN_RATIO = 0.7;
 const NEED_MS = 500, GRACE_MS = 250;
 const ORT_DIST = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
 
@@ -161,7 +161,7 @@ async function loop() {
       avgFrameMs = avgFrameMs ? 0.8 * avgFrameMs + 0.2 * dt : dt;
       const o = out[session.outputNames[0]], [, ch, n] = o.dims;     // [1, 4+nc, n]
       const dets = nms(decode(o.data, ch - 4, n, CONF, INPUT), IOU);
-      const main = pickMain(dets, INPUT, MIN_AREA);
+      const main = pickMain(dets, INPUT, MIN_SIDE);
       // 느린 기기에서도 한 프레임은 놓쳐도 되게: grace ≥ 2.5 × 프레임 시간
       const grace = Math.max(GRACE_MS, 2.5 * avgFrameMs);
       const progress = streak.update(main !== null && main.cls === mission.id, performance.now(), grace);

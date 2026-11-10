@@ -34,11 +34,12 @@ export function nms(dets, iouThres) {
   return keep;
 }
 
-export function pickMain(dets, inputSize, minArea) {
+export function pickMain(dets, inputSize, minSide) {
   let best = null, bestArea = 0;
   for (const d of dets) {
     const area = (d.x2 - d.x1) * (d.y2 - d.y1) / (inputSize * inputSize);
-    if (area >= minArea && area > bestArea) { best = d; bestArea = area; }
+    const longSide = Math.max(d.x2 - d.x1, d.y2 - d.y1) / inputSize;
+    if (longSide >= minSide && area > bestArea) { best = d; bestArea = area; }
   }
   return best;
 }

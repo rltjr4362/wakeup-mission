@@ -260,7 +260,7 @@ shutil.copy(onnx_path, DOCS / 'model.onnx')
 print('docs/model.onnx', round((DOCS / 'model.onnx').stat().st_size / 1e6, 1), 'MB')
 """)
 
-md("## 9. 직접 찍은 사진으로 미션 통과율\n\n`my_photos/<클래스키>/*.jpg` 에 사진을 넣는다 (예: `my_photos/sock/1.jpg`, JPG·PNG, HEIC는 변환 필요). 웹앱과 **같은 규칙**(가운데 틀 · 면적 15% · 신뢰도 0.5)으로 판정한다. 틀은 사진 짧은 변 × 0.7로 웹앱(보이는 화면 기준)의 근사이므로, 물건을 **가운데에 크게** 찍는다.")
+md("## 9. 직접 찍은 사진으로 미션 통과율\n\n`my_photos/<클래스키>/*.jpg` 에 사진을 넣는다 (예: `my_photos/sock/1.jpg`, JPG·PNG, HEIC는 변환 필요). 웹앱과 **같은 규칙**(가운데 틀 · 긴 변이 틀의 40% 이상 · 신뢰도 0.5)으로 판정한다. 틀은 사진 짧은 변 × 0.7로 웹앱(보이는 화면 기준)의 근사이므로, 물건을 **가운데에 크게** 찍는다.")
 code("""
 PHOTOS = ROOT / 'my_photos'
 if PHOTOS.exists() and any(p.suffix.lower() in E.PHOTO_SUFFIXES for p in PHOTOS.rglob('*')):

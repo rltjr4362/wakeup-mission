@@ -35,12 +35,13 @@ def nms(dets, iou_thres=0.45):
     return keep
 
 
-def pick_main(dets, input_size, min_area=0.15):
-    """스캔 틀(=입력 전체) 면적의 min_area 이상인 박스 중 가장 큰 것. 없으면 None."""
+def pick_main(dets, input_size, min_side=0.4):
+    """긴 변이 스캔 틀(=입력 전체) 한 변의 min_side 이상인 박스 중 면적이 가장 큰 것. 없으면 None."""
     best, best_area = None, 0.0
     for d in dets:
         area = (d["x2"] - d["x1"]) * (d["y2"] - d["y1"]) / (input_size * input_size)
-        if area >= min_area and area > best_area:
+        long_side = max(d["x2"] - d["x1"], d["y2"] - d["y1"]) / input_size
+        if long_side >= min_side and area > best_area:
             best, best_area = d, area
     return best
 

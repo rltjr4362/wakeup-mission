@@ -32,11 +32,27 @@ test('nms: 같은 클래스 겹침만 제거', () => {
   assert.deepEqual(nms([b, a, c], 0.45), [a, c]);
 });
 
-test('pickMain: 최소 면적 이상 중 가장 큰 박스', () => {
+test('pickMain: 긴 변이 기준 이상인 박스 중 가장 큰 박스', () => {
   const small = { x1: 0, y1: 0, x2: 50, y2: 50, score: 0.9, cls: 0 };
   const big = { x1: 0, y1: 0, x2: 200, y2: 200, score: 0.6, cls: 1 };
-  assert.equal(pickMain([small, big], 320, 0.15), big);
-  assert.equal(pickMain([small], 320, 0.15), null);
+  assert.equal(pickMain([small, big], 320, 0.4), big);
+  assert.equal(pickMain([small], 320, 0.4), null);
+});
+
+test('pickMain: 가늘고 긴 박스도 긴 변이 40% 이상이면 통과', () => {
+  const thin = { x1: 0, y1: 0, x2: 200, y2: 20, score: 0.8, cls: 0 };
+  const square = { x1: 0, y1: 0, x2: 100, y2: 100, score: 0.9, cls: 1 };
+  const tall = { x1: 0, y1: 0, x2: 20, y2: 200, score: 0.8, cls: 0 };
+  assert.equal(pickMain([thin], 320, 0.4), thin);
+  assert.equal(pickMain([square], 320, 0.4), null);
+  assert.equal(pickMain([tall], 320, 0.4), tall);
+});
+
+test('pickMain: 통과한 박스 중 면적이 큰 쪽이 이긴다', () => {
+  const thin = { x1: 0, y1: 0, x2: 200, y2: 20, score: 0.9, cls: 0 };
+  const big = { x1: 0, y1: 0, x2: 150, y2: 150, score: 0.5, cls: 1 };
+  assert.equal(pickMain([thin, big], 320, 0.4), big);
+  assert.equal(pickMain([big, thin], 320, 0.4), big);
 });
 
 test('scanCrop: 가운데 정사각형', () => {

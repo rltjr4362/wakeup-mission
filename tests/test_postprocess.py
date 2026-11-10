@@ -30,11 +30,25 @@ def test_nms_removes_overlap_same_class_only():
     kept = nms([b, a, c], iou_thres=0.45)
     assert kept == [a, c]
 
-def test_pick_main_largest_above_min_area():
-    small = dict(x1=0, y1=0, x2=50, y2=50, score=0.9, cls=0)      # 2500/102400 = 2.4%
-    big = dict(x1=0, y1=0, x2=200, y2=200, score=0.6, cls=1)      # 39%
-    assert pick_main([small, big], input_size=320, min_area=0.15) == big
-    assert pick_main([small], input_size=320, min_area=0.15) is None
+def test_pick_main_largest_above_min_side():
+    small = dict(x1=0, y1=0, x2=50, y2=50, score=0.9, cls=0)      # 긴 변 16%
+    big = dict(x1=0, y1=0, x2=200, y2=200, score=0.6, cls=1)      # 62%
+    assert pick_main([small, big], input_size=320, min_side=0.4) == big
+    assert pick_main([small], input_size=320, min_side=0.4) is None
+
+def test_pick_main_thin_long_box_qualifies():
+    thin = dict(x1=0, y1=0, x2=200, y2=20, score=0.8, cls=0)      # 긴 변 62%, 면적 4%
+    square = dict(x1=0, y1=0, x2=100, y2=100, score=0.9, cls=1)   # 긴 변 31%
+    assert pick_main([thin], input_size=320, min_side=0.4) == thin
+    assert pick_main([square], input_size=320, min_side=0.4) is None
+    tall = dict(x1=0, y1=0, x2=20, y2=200, score=0.8, cls=0)      # 세로로 긴 것도 통과
+    assert pick_main([tall], input_size=320, min_side=0.4) == tall
+
+def test_pick_main_larger_area_wins_among_qualifiers():
+    thin = dict(x1=0, y1=0, x2=200, y2=20, score=0.9, cls=0)
+    big = dict(x1=0, y1=0, x2=150, y2=150, score=0.5, cls=1)      # 긴 변 47%, 면적 더 큼
+    assert pick_main([thin, big], input_size=320, min_side=0.4) == big
+    assert pick_main([big, thin], input_size=320, min_side=0.4) == big
 
 def test_scan_crop_centered_square():
     assert scan_crop(1280, 720, ratio=0.7) == (388, 108, 504)
@@ -45,9 +59,9 @@ from src.evaluate import mission_passed
 def test_mission_passed_needs_target_class_as_main_box():
     big_sock = dict(x1=0, y1=0, x2=200, y2=200, score=0.8, cls=7)
     big_shoe = dict(x1=0, y1=0, x2=250, y2=250, score=0.9, cls=8)
-    assert mission_passed([big_sock], target=7, input_size=320, min_area=0.15)
-    assert not mission_passed([big_sock, big_shoe], target=7, input_size=320, min_area=0.15)  # 더 큰 게 신발
-    assert not mission_passed([], target=7, input_size=320, min_area=0.15)
+    assert mission_passed([big_sock], target=7, input_size=320, min_side=0.4)
+    assert not mission_passed([big_sock, big_shoe], target=7, input_size=320, min_side=0.4)  # 더 큰 게 신발
+    assert not mission_passed([], target=7, input_size=320, min_side=0.4)
 
 
 def test_decode_clips_to_input_frame():

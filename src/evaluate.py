@@ -8,7 +8,7 @@ import pandas as pd
 from . import config as C
 from .postprocess import decode, nms, pick_main, scan_crop
 
-INPUT, CONF, IOU, MIN_AREA, SCAN_RATIO = 320, 0.5, 0.45, 0.15, 0.7   # 웹앱 app.js와 같은 값
+INPUT, CONF, IOU, MIN_SIDE, SCAN_RATIO = 320, 0.5, 0.45, 0.4, 0.7   # 웹앱 app.js와 같은 값
 PHOTO_SUFFIXES = {".jpg", ".jpeg", ".png"}                            # 소문자로 비교 (대소문자 무관)
 
 
@@ -21,9 +21,9 @@ def per_class_table(metrics, names) -> pd.DataFrame:
     return pd.DataFrame(rows).round(3)
 
 
-def mission_passed(dets, target, input_size=INPUT, min_area=MIN_AREA) -> bool:
+def mission_passed(dets, target, input_size=INPUT, min_side=MIN_SIDE) -> bool:
     """웹앱 판정과 같은 규칙: 틀 안의 '주인공 박스'가 목표 클래스여야 통과."""
-    main = pick_main(dets, input_size, min_area)
+    main = pick_main(dets, input_size, min_side)
     return main is not None and main["cls"] == target
 
 
@@ -64,7 +64,7 @@ def my_photos_table(session, photo_dir: Path) -> pd.DataFrame:
                 continue
             tensor, _ = preprocess(img)
             dets = run_onnx(session, tensor)
-            main = pick_main(dets, INPUT, MIN_AREA)
+            main = pick_main(dets, INPUT, MIN_SIDE)
             rows.append(dict(미션=c.ko, 파일=p.name, 통과=mission_passed(dets, c.id),
                              잡힌것=C.CLASSES[main["cls"]].ko if main else "-",
                              점수=round(main["score"], 2) if main else None))
