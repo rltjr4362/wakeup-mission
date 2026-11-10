@@ -233,9 +233,11 @@ def _np(t):
 
 
 def mission_pass_rate(model, crops_df, crops_dir, conf=0.5, iou=0.45, min_side=0.4,
-                      imgsz=320, device="cpu", batch=32) -> pd.DataFrame:
+                      imgsz=320, device="cpu", batch=32, class_map=None) -> pd.DataFrame:
     """잘라 둔 사진마다 웹앱과 같은 규칙(src.evaluate.mission_passed)으로 통과 여부.
-    열: file, target, cls_key, passed, pred_key(주인공 박스 클래스, 없으면 '-'), score"""
+    열: file, target, cls_key, passed, pred_key(주인공 박스 클래스, 없으면 '-'), score
+    class_map: 모델의 클래스 번호 → 우리 번호 (예: COCO 그대로 쓰는 모델 {64: 0, 25: 1, 73: 2, 79: 3}).
+               주어지면 표에 없는 클래스(사람 등)는 버린다 = 미션 클래스만 찾도록 설정한 앱."""
     from .postprocess import pick_main
     crops_dir = Path(crops_dir)
     records = crops_df.to_dict("records")
@@ -248,7 +250,12 @@ def mission_pass_rate(model, crops_df, crops_dir, conf=0.5, iou=0.45, min_side=0
             b = res.boxes
             dets = []
             for (x1, y1, x2, y2), s, k in zip(_np(b.xyxy), _np(b.conf), _np(b.cls)):
-                dets.append(dict(x1=float(x1), y1=float(y1), x2=float(x2), y2=float(y2), score=float(s), cls=int(k)))
+                k = int(k)
+                if class_map is not None:
+                    if k not in class_map:
+                        continue
+                    k = class_map[k]
+                dets.append(dict(x1=float(x1), y1=float(y1), x2=float(x2), y2=float(y2), score=float(s), cls=k))
             main = pick_main(dets, imgsz, min_side)
             out.append(dict(file=r["file"], target=int(r["target"]), cls_key=r["cls_key"],
                             passed=mission_passed(dets, int(r["target"]), imgsz, min_side),

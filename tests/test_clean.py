@@ -182,3 +182,17 @@ def test_is_unknown_needs_all_five_flags():
     group_only = SimpleNamespace(IsOccluded=False, IsTruncated=False, IsGroupOf=True, IsDepiction=False, IsInside=False)
     assert is_unknown(all_true)
     assert not is_unknown(group_only)
+
+
+class FakeCocoModel:
+    """COCO 번호로 답하는 가짜 YOLO: 사람(0)을 크게, 책(73)을 그보다 작게."""
+    def predict(self, paths, **kw):
+        return [NS(boxes=_FakeBoxes([[0, 0, 320, 320, 0.95, 0], [40, 40, 280, 280, 0.9, 73]])) for p in paths]
+
+
+def test_mission_pass_rate_class_map_keeps_only_mapped_classes():
+    # COCO 그대로 쓰는 앱: 미션 4종(COCO 번호 → 우리 번호)만 남기고 나머지(사람 등)는 버린다
+    crops = pd.DataFrame([dict(file="a.jpg", target=2, cls_key="book")])
+    df = mission_pass_rate(FakeCocoModel(), crops, ".", class_map={73: 2, 64: 0})
+    assert df["passed"].tolist() == [True]
+    assert df["pred_key"].tolist() == ["book"]

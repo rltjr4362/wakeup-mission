@@ -318,6 +318,47 @@ if len(fails):
 """)
 
 md("""
+### 6-1. 튜닝 없이 COCO YOLO 그대로 쓰면?
+
+미션 물건을 **COCO 80종 안에서만** 고른다면 학습 없이도 앱을 만들 수 있다. 우리 10종 중 COCO에 있는 4종(마우스 · 우산 · 책 · 칫솔)으로
+**같은 crop, 같은 앱 규칙**에서 비교한다.
+
+- COCO 그대로: 미션 4종만 찾도록 설정한 앱 (사람 · 컵 등 다른 COCO 클래스는 버림 → `class_map`)
+- A · C (튜닝): 10종 중에서 고르므로 **선택지가 더 많아 오히려 불리**하다 (예: 책을 신발로 착각할 수 있음)
+
+> §5의 mAP 비교(기준선 0.04 → A 0.33 등)는 Open Images 방식 그대로 시험 본 것이라 튜닝 모델에 유리했다.
+> 여기서는 "물건 하나를 크게 비추는" 앱 장면으로 다시 본다.
+""")
+code("""
+base = YOLO('yolo11n.pt')                                  # COCO 80종으로 사전학습된 그대로
+coco_map = {c.coco_id: c.id for c in C.OLD}                # COCO 번호 → 우리 번호 (64→0, 25→1, 73→2, 79→3)
+old_keys = [c.key for c in C.OLD]
+old_crops = crops[crops['cls_key'].isin(old_keys)].reset_index(drop=True)
+
+base_rows = K.mission_pass_rate(base, old_crops, CROPS_DIR, conf=E.CONF, iou=E.IOU, min_side=E.MIN_SIDE,
+                                imgsz=E.INPUT, device=DEVICE, class_map=coco_map)
+
+no_tune = pd.DataFrame({'클래스': [C.BY_KEY[k].ko for k in old_keys]}, index=old_keys)
+no_tune['COCO 그대로 (학습 0분)'] = base_rows.groupby('cls_key')['passed'].mean().reindex(old_keys)
+for mn, df in pass_rows.items():
+    mine = df[df['cls_key'].isin(old_keys)]
+    no_tune[f'{mn} (튜닝)'] = mine.groupby('cls_key')['passed'].mean().reindex(old_keys)
+no_tune['장수'] = old_crops.groupby('cls_key').size().reindex(old_keys)
+
+total = {'클래스': '전체', 'COCO 그대로 (학습 0분)': base_rows['passed'].mean(), '장수': len(old_crops)}
+for mn, df in pass_rows.items():
+    total[f'{mn} (튜닝)'] = df[df['cls_key'].isin(old_keys)]['passed'].mean()
+no_tune.loc['전체'] = pd.Series(total)
+no_tune.round(2)
+""")
+md("""
+읽는 법
+- COCO 그대로가 튜닝 모델과 **비슷하면** → 미션을 COCO 80종 안에서 고르는 한, 튜닝 없이도 충분하다 (학습 0분 · 데이터 0장)
+- 튜닝 모델이 **확실히 높으면** → 같은 물건이라도 우리 데이터로 다시 배운 효과가 앱 장면에서도 있다
+- 어느 쪽이든 모자 · 문 · 휴지 · 양말 · 신발 · 안경은 COCO에 **없어서** 튜닝 없이는 불가능하다 → "어떤 물건을 미션으로 쓸까"는 제품 결정
+""")
+
+md("""
 ## 7. 결론 + 다음 단계
 
 표를 보고 채운다 (숫자는 위 표에서 그대로 옮긴다).
