@@ -56,7 +56,7 @@ pd.DataFrame([dict(id=c.id, 미션=C.mission_text(c), 키=c.key,
                    COCO번호=c.coco_id if c.coco_id is not None else '-') for c in C.CLASSES])
 """)
 
-md("## 2. 데이터 받기 (Open Images V7 → YOLO 형식)\n\n클래스마다 따로 받아 합친다. 처음엔 주석 파일을 받느라 오래 걸린다. 한 번 받으면 캐시를 쓴다.")
+md("## 2. 데이터 받기 (Open Images V7 → YOLO 형식)\n\n클래스마다 따로 받아 합친다. 처음엔 주석 파일을 받느라 오래 걸린다. 한 번 받으면 캐시를 쓴다.\n\nOpen Images는 같은 물건을 상위·하위 라벨(예: Footwear와 Boot)로 두 번 그리기도 해서, 합친 뒤 같은 클래스끼리 IoU 0.7 이상 겹치는 박스는 하나만 남긴다.")
 code("""
 views = {}
 for split, yolo_split in [('train', 'train'), ('validation', 'val')]:
@@ -64,6 +64,7 @@ for split, yolo_split in [('train', 'train'), ('validation', 'val')]:
     views[yolo_split] = D.to_mission_view(ds)
     if not (YOLO_DIR / 'labels' / yolo_split).exists():
         D.export_yolo(views[yolo_split], YOLO_DIR, yolo_split)
+        print(yolo_split, '겹친 박스 제거:', D.dedupe_labels(YOLO_DIR, yolo_split))
 YAML = YOLO_DIR / 'dataset.yaml'
 print(YAML.read_text())
 """)

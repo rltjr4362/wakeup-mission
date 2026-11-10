@@ -1,0 +1,25 @@
+# tests/test_data.py
+from src.data import dedupe_rows, dedupe_labels
+
+
+def test_dedupe_rows_drops_same_class_overlap_keeps_order():
+    a = (8, 0.5, 0.5, 0.4, 0.4)
+    b = (8, 0.51, 0.5, 0.4, 0.4)      # a와 거의 같음 → 제거
+    c = (9, 0.51, 0.5, 0.4, 0.4)      # 다른 클래스 → 유지
+    d = (8, 0.1, 0.1, 0.1, 0.1)       # 안 겹침 → 유지
+    assert dedupe_rows([a, b, c, d]) == [a, c, d]
+
+
+def test_dedupe_rows_keeps_low_iou():
+    a = (0, 0.3, 0.5, 0.4, 0.4)
+    b = (0, 0.5, 0.5, 0.4, 0.4)       # IoU = 1/3 → 유지
+    assert dedupe_rows([a, b]) == [a, b]
+
+
+def test_dedupe_labels_rewrites_files(tmp_path):
+    lab = tmp_path / "labels" / "train"
+    lab.mkdir(parents=True)
+    (lab / "a.txt").write_text("8 0.5 0.5 0.4 0.4\n8 0.51 0.5 0.4 0.4\n9 0.2 0.2 0.1 0.1\n")
+    removed = dedupe_labels(tmp_path, "train")
+    assert removed == 1
+    assert (lab / "a.txt").read_text() == "8 0.500000 0.500000 0.400000 0.400000\n9 0.200000 0.200000 0.100000 0.100000\n"

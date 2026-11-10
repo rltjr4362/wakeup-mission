@@ -42,6 +42,41 @@ def export_yolo(view, out_dir: Path, split: str):
                 label_field="ground_truth", split=split, classes=C.KEYS)
 
 
+def _box_iou(a, b):
+    """YOLO 행 (cls, cx, cy, w, h)의 박스끼리 IoU."""
+    ax1, ay1, ax2, ay2 = a[1] - a[3] / 2, a[2] - a[4] / 2, a[1] + a[3] / 2, a[2] + a[4] / 2
+    bx1, by1, bx2, by2 = b[1] - b[3] / 2, b[2] - b[4] / 2, b[1] + b[3] / 2, b[2] + b[4] / 2
+    ix = max(0.0, min(ax2, bx2) - max(ax1, bx1))
+    iy = max(0.0, min(ay2, by2) - max(ay1, by1))
+    inter = ix * iy
+    union = a[3] * a[4] + b[3] * b[4] - inter
+    return inter / union if union > 0 else 0.0
+
+
+def dedupe_rows(rows, iou_thres=0.7):
+    """앞서 남긴 같은 클래스 박스와 IoU가 iou_thres 이상이면 버린다. 순서는 유지."""
+    kept = []
+    for r in rows:
+        if all(k[0] != r[0] or _box_iou(k, r) < iou_thres for k in kept):
+            kept.append(r)
+    return kept
+
+
+def dedupe_labels(yolo_dir: Path, split: str, iou_thres=0.7) -> int:
+    """labels/{split}/*.txt 를 다시 쓴다. 지운 박스 수를 돌려준다."""
+    removed = 0
+    for lab in sorted((yolo_dir / "labels" / split).glob("*.txt")):
+        rows = []
+        for line in lab.read_text().splitlines():
+            if line.strip():
+                k, *v = line.split()
+                rows.append((int(k), *map(float, v)))
+        kept = dedupe_rows(rows, iou_thres)
+        removed += len(rows) - len(kept)
+        lab.write_text("".join(f"{k} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}\n" for k, cx, cy, w, h in kept))
+    return removed
+
+
 def count_table(view):
     """클래스별 사진 수 · 박스 수 (pandas DataFrame)."""
     import pandas as pd
