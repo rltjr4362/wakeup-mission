@@ -7,6 +7,7 @@ const INPUT = 320, CONF = 0.5, IOU = 0.45, MIN_SIDE = 0.4, SCAN_RATIO = 0.7;
 // 클래스마다 신뢰도 기준이 다를 수 있다 (classes.js의 conf, 없으면 CONF). decode는 가장 낮은 기준으로 한다.
 const DECODE_CONF = minConf(CLASSES, CONF);
 const NEED_MS = 500, GRACE_MS = 250;
+const ALARM_SOUND = false;   // 알람이 울릴 때 반복 삐삐 소리 (false = 소리 없이 화면만). 성공 효과음은 그대로
 const ORT_DIST = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
 
 const $ = id => document.getElementById(id);
@@ -64,6 +65,7 @@ function beep(freq, ms, when = 0) {
 const stopAlarmSound = () => { clearInterval(beepTimer); beepTimer = null; };
 const startAlarmSound = () => {
   stopAlarmSound();
+  if (!ALARM_SOUND) return;
   beepTimer = setInterval(() => { audio?.resume(); beep(880, 150); beep(880, 150, 0.25); }, 1000);
 };
 const successSound = () => { beep(660, 120); beep(990, 200, 0.15); };
