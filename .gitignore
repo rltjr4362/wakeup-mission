@@ -6,3 +6,4 @@ my_photos/
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store
+runs_quick/
