@@ -43,7 +43,35 @@ def mission_text(c: MissionClass) -> str:
     return f"{c.emoji} {c.ko}{'을' if has_batchim(c.ko) else '를'} 비춰라"
 
 
-def to_js() -> str:
-    """웹앱에서 import할 classes.js 내용."""
-    rows = [{"id": c.id, "key": c.key, "ko": c.ko, "emoji": c.emoji} for c in CLASSES]
+# ---------- v2 (실험 E): 13종 ----------
+# 기존 0~9는 그대로 두고 뒤에 붙인다. CLASSES(10종)는 예전 노트북이 쓰므로 바꾸지 않는다.
+# Open Images에는 "Tumbler"가 없어서 가장 가까운 "Bottle"을 텀블러로 쓴다.
+CLASSES13 = CLASSES + [
+    MissionClass(10, "cup",     "컵",     "☕", ("Mug", "Coffee cup"), None),
+    MissionClass(11, "tumbler", "텀블러", "🥤", ("Bottle",), None),
+    MissionClass(12, "chair",   "의자",   "🪑", ("Chair",), None),
+]
+KEYS13 = [c.key for c in CLASSES13]
+BY_KEY13 = {c.key: c for c in CLASSES13}
+OI_TO_KEY13 = {lab: c.key for c in CLASSES13 for lab in c.oi_labels}
+
+# 하드 네거티브: 사람들이 카메라에 비출 법한 '미션이 아닌' 물건 + 손. 이 라벨의 박스는 내보내지 않는다(배경).
+NEG_LABELS = ("Mobile phone", "Remote control", "Computer keyboard", "Human hand", "Pen", "Watch",
+              "Headphones", "Tablet computer", "Spoon", "Box", "Pillow", "Towel", "Plastic bag",
+              "Bowl", "Laptop", "Kitchen utensil")
+
+
+def oi_to_key(classes=None) -> dict:
+    """Open Images 라벨 → 클래스 키 (classes 기본값 = 10종)."""
+    return {lab: c.key for c in (classes or CLASSES) for lab in c.oi_labels}
+
+
+def to_js(classes=None, conf=None) -> str:
+    """웹앱에서 import할 classes.js 내용. conf: {클래스 키: 신뢰도 기준}이 있으면 클래스마다 conf 칸을 넣는다."""
+    rows = []
+    for c in classes or CLASSES:
+        row = {"id": c.id, "key": c.key, "ko": c.ko, "emoji": c.emoji}
+        if conf and c.key in conf:
+            row["conf"] = round(float(conf[c.key]), 2)
+        rows.append(row)
     return "export const CLASSES = " + json.dumps(rows, ensure_ascii=False, indent=1) + ";\n"

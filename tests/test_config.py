@@ -29,3 +29,25 @@ def test_js_export_contains_all_classes():
     js = C.to_js()
     assert js.startswith("export const CLASSES = [")
     assert js.count('"key"') == 10
+
+
+def test_classes13_appends_three_keeping_old_ids():
+    assert C.CLASSES13[:10] == C.CLASSES
+    assert [c.key for c in C.CLASSES13[10:]] == ["cup", "tumbler", "chair"]
+    assert [c.id for c in C.CLASSES13] == list(range(13))
+    assert C.OI_TO_KEY13["Mug"] == "cup" and C.OI_TO_KEY13["Coffee cup"] == "cup"
+    assert C.OI_TO_KEY13["Bottle"] == "tumbler" and C.OI_TO_KEY13["Chair"] == "chair"
+    assert C.oi_to_key(C.CLASSES13) == C.OI_TO_KEY13 and C.oi_to_key() == C.OI_TO_KEY
+    assert not set(C.NEG_LABELS) & set(C.OI_TO_KEY13)
+
+
+def test_mission_text_new_classes():
+    assert C.mission_text(C.BY_KEY13["cup"]) == "☕ 컵을 비춰라"
+    assert C.mission_text(C.BY_KEY13["chair"]) == "🪑 의자를 비춰라"
+
+
+def test_js_export_13_with_conf():
+    js = C.to_js(C.CLASSES13, conf={"mouse": 0.85, "cup": 0.5})
+    assert js.count('"key"') == 13
+    assert '"conf": 0.85' in js and '"conf": 0.5' in js and js.count('"conf"') == 2
+    assert '"conf"' not in C.to_js()

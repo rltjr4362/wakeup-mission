@@ -38,3 +38,18 @@ def test_label_counts_reads_label_files(tmp_path):
     assert df.loc[0].tolist() == [1, 2]
     assert df.loc[3].tolist() == [2, 2]
     assert df.loc[1].tolist() == [0, 0]
+
+
+def test_per_class_counts_int_and_dict():
+    from src.data import per_class_counts
+    assert per_class_counts(400, C.CLASSES13) == {c.key: 400 for c in C.CLASSES13}
+    got = per_class_counts({"*": 400, "door": 1000}, C.CLASSES13)
+    assert got["door"] == 1000 and got["cup"] == 400 and len(got) == 13
+
+
+def test_label_counts_13_classes(tmp_path):
+    lab = tmp_path / "labels" / "val"
+    lab.mkdir(parents=True)
+    (lab / "a.txt").write_text("12 0.5 0.5 0.4 0.4\n")
+    df = label_counts(tmp_path, "val", C.CLASSES13).set_index("id")
+    assert len(df) == 13 and df.loc[12].tolist() == [1, 1]

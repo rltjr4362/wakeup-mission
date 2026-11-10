@@ -11,35 +11,72 @@ from fiftyone import ViewField as F
 from . import config as C
 
 
-def load_split(split: str, per_class: int, seed: int = 51) -> fo.Dataset:
-    """클래스마다 따로 받아(per_class장) 하나로 합친다. 같은 사진은 한 번만 들어간다."""
-    name = f"wakeup-{split}-{per_class}"
+def per_class_counts(per_class, classes) -> dict:
+    """per_class(정수 또는 {키: 장수, '*': 기본값}) → {키: 장수}."""
+    if isinstance(per_class, int):
+        return {c.key: per_class for c in classes}
+    return {c.key: per_class.get(c.key, per_class.get("*")) for c in classes}
+
+
+def load_split(split: str, per_class, seed: int = 51, classes=None, name=None) -> fo.Dataset:
+    """클래스마다 따로 받아(per_class장) 하나로 합친다. 같은 사진은 한 번만 들어간다.
+    per_class: 정수, 또는 클래스마다 다르게 {키: 장수, '*': 기본값}. name: 합친 데이터셋 이름 (기본 wakeup-<split>-<per_class>)."""
+    classes = classes or C.CLASSES
+    counts = per_class_counts(per_class, classes)
+    name = name or f"wakeup-{split}-{per_class}"
     if fo.dataset_exists(name):
         ds = fo.load_dataset(name)
         if ds.persistent:                   # 끝까지 합쳐진 것만 재사용
             return ds
         ds.delete()                         # 같은 커널에서 중단된 반쪽짜리
     merged = fo.Dataset(name)               # 다 합친 뒤에만 persistent → 중단되면 다음에 처음부터
-    for c in C.CLASSES:
+    for c in classes:
         part = foz.load_zoo_dataset(
             "open-images-v7", split=split, label_types=["detections"],
-            classes=list(c.oi_labels), max_samples=per_class, seed=seed, shuffle=True,
-            dataset_name=f"oi-{split}-{c.key}-{per_class}")
+            classes=list(c.oi_labels), max_samples=counts[c.key], seed=seed, shuffle=True,
+            dataset_name=f"oi-{split}-{c.key}-{counts[c.key]}")
         merged.merge_samples(part)          # filepath 기준으로 합침 (중복 제거)
     merged.persistent = True
     return merged
 
 
-def to_mission_view(ds: fo.Dataset):
-    """10종에 해당하는 박스만 남기고, Open Images 라벨을 우리 클래스 키로 바꾼다."""
-    view = ds.filter_labels("ground_truth", F("label").is_in(list(C.OI_TO_KEY)), only_matches=True)
-    return view.map_labels("ground_truth", C.OI_TO_KEY)
+def to_mission_view(ds: fo.Dataset, classes=None):
+    """우리 클래스(기본 10종)에 해당하는 박스만 남기고, Open Images 라벨을 우리 클래스 키로 바꾼다."""
+    mapping = C.oi_to_key(classes)
+    view = ds.filter_labels("ground_truth", F("label").is_in(list(mapping)), only_matches=True)
+    return view.map_labels("ground_truth", mapping)
 
 
-def export_yolo(view, out_dir: Path, split: str):
+def export_yolo(view, out_dir: Path, split: str, classes=None):
     """YOLO 형식: out_dir/images/{split}, out_dir/labels/{split}, out_dir/dataset.yaml"""
     view.export(export_dir=str(out_dir), dataset_type=fo.types.YOLOv5Dataset,
-                label_field="ground_truth", split=split, classes=C.KEYS)
+                label_field="ground_truth", split=split, classes=[c.key for c in classes or C.CLASSES])
+
+
+def load_negatives(split: str, per_label: int, labels=None, seed: int = 51, prefix="wakeup13") -> fo.Dataset:
+    """하드 네거티브 라벨마다 per_label장씩 받아 합친다 (라벨 이름이 거부되면 건너뛰고 알린다).
+    합친 데이터셋 이름: <prefix>-neg-<split>-<per_label>"""
+    labels = labels or C.NEG_LABELS
+    name = f"{prefix}-neg-{split}-{per_label}"
+    if fo.dataset_exists(name):
+        ds = fo.load_dataset(name)
+        if ds.persistent:
+            return ds
+        ds.delete()
+    merged = fo.Dataset(name)
+    for lab in labels:
+        slug = lab.lower().replace(" ", "_")
+        try:
+            part = foz.load_zoo_dataset(
+                "open-images-v7", split=split, label_types=["detections"],
+                classes=[lab], max_samples=per_label, seed=seed, shuffle=True,
+                dataset_name=f"oi-{split}-neg-{slug}-{per_label}")
+        except ValueError as e:                 # 없는 라벨
+            print(f"⚠️ 네거티브 라벨 건너뜀: {lab} ({e})")
+            continue
+        merged.merge_samples(part)
+    merged.persistent = True
+    return merged
 
 
 def _box_iou(a, b):
@@ -77,11 +114,11 @@ def dedupe_labels(yolo_dir: Path, split: str, iou_thres=0.7) -> int:
     return removed
 
 
-def label_counts(yolo_dir: Path, split: str):
+def label_counts(yolo_dir: Path, split: str, classes=None):
     """내보낸(겹친 박스 제거 후) labels/{split}/*.txt 기준 클래스별 사진 수 · 박스 수. 열: id, 사진, 박스"""
     import pandas as pd
-    imgs = {c.id: 0 for c in C.CLASSES}
-    boxes = {c.id: 0 for c in C.CLASSES}
+    imgs = {c.id: 0 for c in classes or C.CLASSES}
+    boxes = {c.id: 0 for c in classes or C.CLASSES}
     for lab in (yolo_dir / "labels" / split).glob("*.txt"):
         ks = [int(line.split()[0]) for line in lab.read_text().splitlines() if line.strip()]
         for k in ks:
@@ -91,12 +128,12 @@ def label_counts(yolo_dir: Path, split: str):
     return pd.DataFrame([dict(id=i, 사진=imgs[i], 박스=boxes[i]) for i in imgs])
 
 
-def count_table(view):
+def count_table(view, classes=None):
     """클래스별 사진 수 · 박스 수 (pandas DataFrame)."""
     import pandas as pd
     boxes = view.count_values("ground_truth.detections.label")
     rows = []
-    for c in C.CLASSES:
+    for c in classes or C.CLASSES:
         n_img = len(view.match(F("ground_truth.detections").filter(F("label") == c.key).length() > 0))
         rows.append(dict(id=c.id, 클래스=c.ko, 키=c.key, 사진=n_img, 박스=boxes.get(c.key, 0),
                          구분="기존(COCO)" if c.coco_id is not None else "새로"))
