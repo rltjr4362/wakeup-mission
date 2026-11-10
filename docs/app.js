@@ -14,6 +14,7 @@ const wctx = work.getContext('2d', { willReadFrequently: true });
 
 let sessionPromise = null, session = null, audio = null, alarmTimer = null, beepTimer = null, wakeLock = null;
 let mission = null, ringing = false, starting = false, running = false, startedAt = 0, scanPhase = 0;
+let busy = false, avgFrameMs = 0;   // busy: 설정 버튼 처리 중 · avgFrameMs: 한 프레임 추론 시간(지수이동평균)
 const streak = new Streak(NEED_MS, GRACE_MS);
 
 // ── 화면 전환 ──
@@ -44,6 +45,10 @@ function ensureAudio() {
   audio ??= new (window.AudioContext || window.webkitAudioContext)();
   return audio.resume();
 }
+// Safari 16.4+: 'playback'이면 무음 스위치를 켜 둬도 WebAudio 소리가 난다
+function setPlaybackSession() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* 지원 안 하면 무시 */ }
+}
 function beep(freq, ms, when = 0) {
   if (!audio) return;
   const o = audio.createOscillator(), g = audio.createGain();
@@ -73,6 +78,7 @@ document.addEventListener('visibilitychange', () => {
 // ── 카메라 (getUserMedia는 HTTPS 또는 localhost에서만 동작) ──
 async function startCamera() {
   if (!navigator.mediaDevices?.getUserMedia) throw new Error('카메라를 쓸 수 없어요 (HTTPS 주소로 열어 주세요)');
+  stopCamera();   // 이전 스트림이 남아 있으면 먼저 끈다 (카메라 누수 방지)
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
   video.srcObject = stream;
@@ -89,11 +95,11 @@ function toTensor() {
   return new ort.Tensor('float32', f, [1, 3, INPUT, INPUT]);
 }
 
-// ── 화면 좌표: video는 object-fit: cover로 가운데 정렬 → 스캔 틀도 화면 가운데 ──
-// cover 배율 k = max(W/vw, H/vh). 영상 중심 = 화면 중심이고 스캔 틀은 영상 가운데 정사각형이므로
-// 화면에서는 한 변 s·k인 가운데 정사각형이 된다.
-// 스캔 틀(영상 픽셀 좌표). 화면에 "보이는" 영역의 짧은 변 × SCAN_RATIO 로 잡는다.
-// (object-fit: cover라 영상 일부가 잘려 보임 → 가로 영상을 세로 화면에 띄워도 틀이 화면 안에 들어오게)
+// ── 스캔 틀 ──
+// video는 object-fit: cover로 화면 가운데에 맞춰지고, 넘치는 부분은 잘려 보이지 않는다.
+// 스캔 틀은 영상 전체가 아니라 화면에 "보이는" 영역의 짧은 변 × SCAN_RATIO(0.7)인 가운데 정사각형이다
+// (가로 영상을 세로 화면에 띄워도 틀이 화면 안에 들어오게).
+// cropRect: 영상 픽셀 좌표 [x, y, s]. screenBox: cover 배율 k = max(W/vw, H/vh)를 곱한 화면 좌표 (한 변 s·k, 화면 가운데).
 function cropRect() {
   const vw = video.videoWidth, vh = video.videoHeight;
   const k = Math.max(overlay.clientWidth / vw, overlay.clientHeight / vh);   // cover 배율
@@ -148,12 +154,17 @@ async function loop() {
   if (!running) return;
   if (video.readyState >= 2 && video.videoWidth > 0) {
     try {
+      const t0 = performance.now();
       const out = await session.run({ [session.inputNames[0]]: toTensor() });
       if (!running) return;
+      const dt = performance.now() - t0;
+      avgFrameMs = avgFrameMs ? 0.8 * avgFrameMs + 0.2 * dt : dt;
       const o = out[session.outputNames[0]], [, ch, n] = o.dims;     // [1, 4+nc, n]
       const dets = nms(decode(o.data, ch - 4, n, CONF, INPUT), IOU);
       const main = pickMain(dets, INPUT, MIN_AREA);
-      const progress = streak.update(main !== null && main.cls === mission.id, performance.now());
+      // 느린 기기에서도 한 프레임은 놓쳐도 되게: grace ≥ 2.5 × 프레임 시간
+      const grace = Math.max(GRACE_MS, 2.5 * avgFrameMs);
+      const progress = streak.update(main !== null && main.cls === mission.id, performance.now(), grace);
       $('message').textContent = main && main.cls !== mission.id && CLASSES[main.cls] ? notText(CLASSES[main.cls]) : '';
       draw(dets, main, progress);
       if (progress >= 1) return success();
@@ -193,8 +204,12 @@ async function startScan() {
   running = true;
   loop();
 }
-// 카메라/모델 시작에 실패했으면 화면을 눌러 다시 시도 (터치이므로 소리도 다시 깨운다)
-$('scan').onclick = () => { if (ringing && !running && !starting) { ensureAudio(); startScan(); } };
+// 스캔 화면을 누를 때마다 소리를 깨운다 (iOS는 터치 안에서만 resume 가능).
+// 카메라/모델 시작에 실패했으면 다시 시도한다.
+$('scan').onclick = () => {
+  ensureAudio().catch(() => {});
+  if (!running && !starting && ringing) startScan();
+};
 
 function success() {
   running = false; ringing = false;
@@ -212,18 +227,33 @@ function success() {
 }
 
 // ── 버튼 ──
-const fail = e => { $('status').textContent = '오류: ' + e.message; };
+const fail = e => { releaseWake(); $('status').textContent = '오류: ' + e.message; };
+// 처리 중에는 두 버튼을 모두 막는다 (두 번 누르기 · 둘 다 누르기 방지)
+function setBusy(b) { busy = b; $('arm').disabled = b; $('now').disabled = b; }
+// "HH:MM" → [시, 분]. 비었거나 이상하면 null
+function parseTime(v) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v || '');
+  if (!m) return null;
+  const hh = Number(m[1]), mm = Number(m[2]);
+  return hh < 24 && mm < 60 ? [hh, mm] : null;
+}
 
 $('arm').onclick = async () => {
+  if (busy) return;
+  const hm = parseTime($('time').value);
+  if (!hm) { $('status').textContent = '알람 시각을 먼저 정해 주세요'; return; }
+  setBusy(true);
   try {
     // resume()과 wake lock 요청은 await 전에, 즉 사용자 터치 안에서 시작한다
+    setPlaybackSession();
     const resumed = ensureAudio(), awake = keepAwake();
     await resumed; await awake;
     await loadModel();
     // 카메라 권한을 미리 받아 둔다 (알람 시각에 권한 창이 뜨지 않게)
     await startCamera(); stopCamera();
   } catch (e) { return fail(e); }
-  const [hh, mm] = $('time').value.split(':').map(Number);
+  finally { setBusy(false); }
+  const [hh, mm] = hm;
   const target = new Date(); target.setHours(hh, mm, 0, 0);
   if (target <= new Date()) target.setDate(target.getDate() + 1);
   $('armedTime').textContent = $('time').value;
@@ -232,11 +262,15 @@ $('arm').onclick = async () => {
   alarmTimer = setInterval(() => { if (new Date() >= target) ring(); }, 1000);
 };
 $('now').onclick = async () => {
+  if (busy) return;
+  setBusy(true);
   try {
+    setPlaybackSession();
     const resumed = ensureAudio(), awake = keepAwake();
     await resumed; await awake;
     await loadModel();
   } catch (e) { return fail(e); }
+  finally { setBusy(false); }
   ring();
 };
 $('cancel').onclick = () => { clearInterval(alarmTimer); alarmTimer = null; releaseWake(); show('setup'); };

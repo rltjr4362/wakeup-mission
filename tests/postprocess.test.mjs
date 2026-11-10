@@ -61,3 +61,13 @@ test('decode: 박스를 입력 범위 [0, 320]로 자르기', () => {
   assert.equal(b.x2, 320);
   assert.equal(decode(data, 3, 5, 0.5, 300)[1].x2, 300);
 });
+
+test('Streak: 호출마다 graceMs를 넓힐 수 있다 (느린 기기에서 한 프레임 놓침 허용)', () => {
+  const s = new Streak(500, 250);
+  s.update(true, 0);
+  assert.equal(s.update(false, 400), 0);            // 기본 grace 250 → 끊김
+  const t = new Streak(500, 250);
+  t.update(true, 0);
+  assert.equal(t.update(false, 400, 1000), 0);      // 놓친 프레임: 진행률 그대로 0
+  assert.equal(t.update(true, 600, 1000), 1);       // 이어짐 → 600ms 연속
+});

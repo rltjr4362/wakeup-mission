@@ -49,14 +49,15 @@ export function scanCrop(w, h, ratio) {
 }
 
 // 미션 물건이 needMs 동안 "연속으로" 보이면 진행률 1. graceMs 이하의 짧은 끊김(한두 프레임 놓침)은 봐준다.
+// update의 graceMs를 주면 그 호출에서만 기본값 대신 쓴다 (느린 기기에서 프레임 간격에 맞춰 넓히기).
 export class Streak {
   constructor(needMs, graceMs) { this.needMs = needMs; this.graceMs = graceMs; this.reset(); }
   reset() { this.start = null; this.lastSeen = null; }
-  update(seen, now) {
+  update(seen, now, graceMs = this.graceMs) {
     if (seen) {
       if (this.start === null) this.start = now;
       this.lastSeen = now;
-    } else if (this.lastSeen === null || now - this.lastSeen > this.graceMs) {
+    } else if (this.lastSeen === null || now - this.lastSeen > graceMs) {
       this.reset();
       return 0;
     }

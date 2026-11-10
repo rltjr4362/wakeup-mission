@@ -20,3 +20,4 @@ button.primary { background: var(--accent); color: #062; font-weight: 700; }
   font-size: 26px; font-weight: 800; padding: 12px; border-radius: 14px; background: rgba(0,0,0,.6); }
 .message { position: absolute; bottom: 120px; left: 16px; right: 16px; font-size: 20px; font-weight: 700; color: var(--warn); min-height: 28px; }
 #snapshot { width: min(320px, 100%); border-radius: 12px; }
+button:disabled { opacity: 0.5; }
