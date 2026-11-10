@@ -44,6 +44,16 @@ export function pickMain(dets, inputSize, minSide) {
   return best;
 }
 
+// 클래스마다 다른 신뢰도 기준: classes[cls].conf가 있으면 그 값, 없으면 defaultConf (src/missioneval.py apply_thr와 같음)
+export const confOf = (classes, cls, defaultConf) => classes[cls]?.conf ?? defaultConf;
+export function applyConf(dets, classes, defaultConf) {
+  return dets.filter(d => d.score >= confOf(classes, d.cls, defaultConf));
+}
+// decode에 쓸 가장 낮은 기준 (이보다 낮은 박스는 어느 클래스에서도 통과 못 함)
+export function minConf(classes, defaultConf) {
+  return Math.min(...classes.map(c => c.conf ?? defaultConf));
+}
+
 export function scanCrop(w, h, ratio) {
   const s = Math.round(ratio * Math.min(w, h));
   return [Math.floor((w - s) / 2), Math.floor((h - s) / 2), s];

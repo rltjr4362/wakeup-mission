@@ -1,7 +1,7 @@
 // tests/postprocess.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { decode, iou, nms, pickMain, scanCrop, Streak } from '../docs/postprocess.js';
+import { decode, iou, nms, pickMain, scanCrop, Streak, applyConf, confOf, minConf } from '../docs/postprocess.js';
 
 function makeOutput(boxes, nc = 3, n = 5) {
   const data = new Float32Array((4 + nc) * n);
@@ -86,4 +86,14 @@ test('Streak: 호출마다 graceMs를 넓힐 수 있다 (느린 기기에서 한
   t.update(true, 0);
   assert.equal(t.update(false, 400, 1000), 0);      // 놓친 프레임: 진행률 그대로 0
   assert.equal(t.update(true, 600, 1000), 1);       // 이어짐 → 600ms 연속
+});
+
+test('applyConf: 클래스별 기준 (없으면 기본값)', () => {
+  const classes = [{ key: 'mouse', conf: 0.85 }, { key: 'cup' }];
+  const dets = [{ cls: 0, score: 0.8 }, { cls: 0, score: 0.9 }, { cls: 1, score: 0.55 }, { cls: 1, score: 0.45 }];
+  assert.deepEqual(applyConf(dets, classes, 0.5).map(d => d.score), [0.9, 0.55]);
+  assert.equal(confOf(classes, 0, 0.5), 0.85);
+  assert.equal(confOf(classes, 7, 0.5), 0.5);        // 모르는 클래스 → 기본값
+  assert.equal(minConf(classes, 0.5), 0.5);
+  assert.equal(minConf([{ conf: 0.45 }, { conf: 0.9 }], 0.5), 0.45);
 });
