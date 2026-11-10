@@ -1,9 +1,11 @@
 // docs/app.js — 카메라 → 스캔 틀 → ONNX 추론 → 미션 판정 → 알람 해제
 import { CLASSES } from './classes.js';
-import { decode, nms, pickMain, scanCrop, Streak } from './postprocess.js';
+import { decode, nms, pickMain, scanCrop, Streak, applyConf, minConf } from './postprocess.js';
 
 // ── 설정 (src/evaluate.py와 같은 값) ──
 const INPUT = 320, CONF = 0.5, IOU = 0.45, MIN_SIDE = 0.4, SCAN_RATIO = 0.7;
+// 클래스마다 신뢰도 기준이 다를 수 있다 (classes.js의 conf, 없으면 CONF). decode는 가장 낮은 기준으로 한다.
+const DECODE_CONF = minConf(CLASSES, CONF);
 const NEED_MS = 500, GRACE_MS = 250;
 const ORT_DIST = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
 
@@ -25,7 +27,8 @@ function show(id) {
 // ── 한국어 조사 ──
 const hasBatchim = w => { const c = w.charCodeAt(w.length - 1) - 0xac00; return c >= 0 && c <= 11171 && c % 28 !== 0; };
 const missionText = c => `${c.emoji} ${c.ko}${hasBatchim(c.ko) ? '을' : '를'} 비춰라`;
-const notText = c => `그건 ${c.ko}${hasBatchim(c.ko) ? '이' : '가'} 아니잖아요!`;
+// 예: 미션 우산 · 잡힌 것 모자 → "그건 우산이 아니라 모자예요!"
+const notText = (want, got) => `그건 ${want.ko}${hasBatchim(want.ko) ? '이' : '가'} 아니라 ${got.ko}${hasBatchim(got.ko) ? '이에요' : '예요'}!`;
 
 // ── 모델 (여러 번 불려도 세션은 하나만 만든다) ──
 function loadModel() {
@@ -160,12 +163,12 @@ async function loop() {
       const dt = performance.now() - t0;
       avgFrameMs = avgFrameMs ? 0.8 * avgFrameMs + 0.2 * dt : dt;
       const o = out[session.outputNames[0]], [, ch, n] = o.dims;     // [1, 4+nc, n]
-      const dets = nms(decode(o.data, ch - 4, n, CONF, INPUT), IOU);
+      const dets = applyConf(nms(decode(o.data, ch - 4, n, DECODE_CONF, INPUT), IOU), CLASSES, CONF);
       const main = pickMain(dets, INPUT, MIN_SIDE);
       // 느린 기기에서도 한 프레임은 놓쳐도 되게: grace ≥ 2.5 × 프레임 시간
       const grace = Math.max(GRACE_MS, 2.5 * avgFrameMs);
       const progress = streak.update(main !== null && main.cls === mission.id, performance.now(), grace);
-      $('message').textContent = main && main.cls !== mission.id && CLASSES[main.cls] ? notText(CLASSES[main.cls]) : '';
+      $('message').textContent = main && main.cls !== mission.id && CLASSES[main.cls] ? notText(mission, CLASSES[main.cls]) : '';
       draw(dets, main, progress);
       if (progress >= 1) return success();
     } catch (e) {
