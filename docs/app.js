@@ -82,7 +82,7 @@ function stopCamera() { video.srcObject?.getTracks().forEach(t => t.stop()); vid
 
 // ── 전처리: 가운데 스캔 틀 → 320×320 → [1,3,320,320] 0~1 ──
 function toTensor() {
-  const [sx, sy, s] = scanCrop(video.videoWidth, video.videoHeight, SCAN_RATIO);
+  const [sx, sy, s] = cropRect();
   wctx.drawImage(video, sx, sy, s, s, 0, 0, INPUT, INPUT);
   const px = wctx.getImageData(0, 0, INPUT, INPUT).data, n = INPUT * INPUT, f = new Float32Array(3 * n);
   for (let i = 0; i < n; i++) { f[i] = px[4 * i] / 255; f[n + i] = px[4 * i + 1] / 255; f[2 * n + i] = px[4 * i + 2] / 255; }
@@ -92,12 +92,23 @@ function toTensor() {
 // ── 화면 좌표: video는 object-fit: cover로 가운데 정렬 → 스캔 틀도 화면 가운데 ──
 // cover 배율 k = max(W/vw, H/vh). 영상 중심 = 화면 중심이고 스캔 틀은 영상 가운데 정사각형이므로
 // 화면에서는 한 변 s·k인 가운데 정사각형이 된다.
+// 스캔 틀(영상 픽셀 좌표). 화면에 "보이는" 영역의 짧은 변 × SCAN_RATIO 로 잡는다.
+// (object-fit: cover라 영상 일부가 잘려 보임 → 가로 영상을 세로 화면에 띄워도 틀이 화면 안에 들어오게)
+function cropRect() {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const k = Math.max(overlay.clientWidth / vw, overlay.clientHeight / vh);   // cover 배율
+  const visible = Math.min(overlay.clientWidth, overlay.clientHeight) / k;  // 보이는 영역 짧은 변 (영상 픽셀)
+  const [, , full] = scanCrop(vw, vh, 1);
+  const s = Math.min(full, Math.round(SCAN_RATIO * visible));
+  return [Math.floor((vw - s) / 2), Math.floor((vh - s) / 2), s];
+}
+
 function screenBox() {
   const dpr = window.devicePixelRatio || 1;
   const W = Math.round(overlay.clientWidth * dpr), H = Math.round(overlay.clientHeight * dpr);
   if (overlay.width !== W || overlay.height !== H) { overlay.width = W; overlay.height = H; }
   const k = Math.max(W / video.videoWidth, H / video.videoHeight);
-  const side = scanCrop(video.videoWidth, video.videoHeight, SCAN_RATIO)[2] * k;
+  const side = cropRect()[2] * k;
   return { x: (W - side) / 2, y: (H - side) / 2, side, W, H, dpr };
 }
 
@@ -190,7 +201,7 @@ function success() {
   stopAlarmSound(); successSound();
   // 스냅샷 = 모델이 본 스캔 틀 부분 그대로
   const snap = $('snapshot');
-  const [sx, sy, s] = scanCrop(video.videoWidth, video.videoHeight, SCAN_RATIO);
+  const [sx, sy, s] = cropRect();
   snap.width = snap.height = s;
   snap.getContext('2d').drawImage(video, sx, sy, s, s, 0, 0, s, s);
   stopCamera();

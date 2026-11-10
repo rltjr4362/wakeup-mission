@@ -7,3 +7,4 @@ __pycache__/
 .ipynb_checkpoints/
 .DS_Store
 runs_quick/
+full_run.log
