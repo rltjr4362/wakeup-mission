@@ -9,3 +9,4 @@ pytest
 ipykernel
 nbformat
 nbconvert
+papermill
