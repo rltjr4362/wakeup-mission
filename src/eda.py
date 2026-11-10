@@ -19,7 +19,7 @@ def _box_row(split, sample, d, min_area):
         row[a] = _flag(getattr(d, a, None))                 # None · 없음 → False
     # Open Images CSV의 -1(= 모름)을 FiftyOne은 True로 읽는다 → 다섯 속성이 모두 True면 사실은 "모름"
     row["attr_unknown"] = all(row[a] for a in ATTRS)
-    row["drop"] = should_drop(row["IsGroupOf"], row["IsDepiction"], row["area"], min_area)
+    row["drop"] = should_drop(row["IsGroupOf"], row["IsDepiction"], row["area"], min_area, unknown=row["attr_unknown"])
     return row
 
 

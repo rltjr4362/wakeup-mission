@@ -93,4 +93,4 @@ def test_box_table_marks_unknown_attrs():
     df = box_table(views)
     assert df["attr_unknown"].dtype == bool
     assert list(df["attr_unknown"]) == [True, False]
-    assert list(df["drop"]) == [True, True]          # drop은 실험 C 규칙 그대로 (모름도 지움)
+    assert list(df["drop"]) == [False, True]         # 모름 → 면적 규칙만 (25%라 남김), 진짜 묶음 → 지움

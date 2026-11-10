@@ -26,8 +26,20 @@ def _flag(v) -> bool:
     return v is True or v == 1
 
 
-def should_drop(is_group_of, is_depiction, area, min_area=0.01) -> bool:
-    """앱 장면과 다른 박스면 True. area는 사진 면적 대비 비율(w*h, 0~1)."""
+ATTRS = ("IsOccluded", "IsTruncated", "IsGroupOf", "IsDepiction", "IsInside")
+
+
+def is_unknown(d) -> bool:
+    """Open Images CSV는 '모름'을 -1로 적는데 FiftyOne은 이를 True로 읽는다.
+    그래서 다섯 속성이 모두 True면 실제로는 '모름'으로 본다."""
+    return all(_flag(getattr(d, a, None)) for a in ATTRS)
+
+
+def should_drop(is_group_of, is_depiction, area, min_area=0.01, unknown=False) -> bool:
+    """앱 장면과 다른 박스면 True. area는 사진 면적 대비 비율(w*h, 0~1).
+    속성이 '모름'(unknown)이면 묶음 · 그림 표시를 믿지 않고 면적 규칙만 쓴다."""
+    if unknown:
+        return area < min_area
     return _flag(is_group_of) or _flag(is_depiction) or area < min_area
 
 
@@ -60,7 +72,7 @@ def split_dets(dets, min_area):
         if d.label not in C.BY_KEY:
             continue
         x, y, bw, bh = d.bounding_box
-        if should_drop(getattr(d, "IsGroupOf", None), getattr(d, "IsDepiction", None), bw * bh, min_area):
+        if should_drop(getattr(d, "IsGroupOf", None), getattr(d, "IsDepiction", None), bw * bh, min_area, unknown=is_unknown(d)):
             dropped.append(d)
         else:
             kept.append(d)
@@ -149,7 +161,10 @@ def reason_table(view, min_area=0.01) -> pd.DataFrame:
                 continue
             x, y, bw, bh = d.bounding_box
             n = counts[d.label]
-            group, depict, small = _flag(getattr(d, "IsGroupOf", None)), _flag(getattr(d, "IsDepiction", None)), bw * bh < min_area
+            unknown = is_unknown(d)                              # '모름'이면 묶음 · 그림 표시를 세지 않음
+            group = _flag(getattr(d, "IsGroupOf", None)) and not unknown
+            depict = _flag(getattr(d, "IsDepiction", None)) and not unknown
+            small = bw * bh < min_area
             n["박스"] += 1
             n["묶음"] += group
             n["그림"] += depict

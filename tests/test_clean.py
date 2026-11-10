@@ -165,3 +165,20 @@ def test_mission_pass_rate(tmp_path):
     df = mission_pass_rate(FakeModel(), crops, tmp_path, batch=2)
     assert df["passed"].tolist() == [True, False, False]
     assert df["pred_key"].tolist() == ["book", "-", "book"]
+
+
+def test_should_drop_unknown_attrs_uses_area_rule_only():
+    # Open Images CSV의 -1(모름)을 FiftyOne은 True로 읽는다 → 다섯 속성이 모두 True면 "모름"
+    from src.clean import should_drop
+    assert not should_drop(True, True, 0.2, unknown=True)
+    assert should_drop(True, True, 0.005, unknown=True)
+    assert should_drop(True, False, 0.2)          # 진짜 묶음 박스는 그대로 지움
+
+
+def test_is_unknown_needs_all_five_flags():
+    from types import SimpleNamespace
+    from src.clean import is_unknown
+    all_true = SimpleNamespace(IsOccluded=True, IsTruncated=True, IsGroupOf=True, IsDepiction=True, IsInside=True)
+    group_only = SimpleNamespace(IsOccluded=False, IsTruncated=False, IsGroupOf=True, IsDepiction=False, IsInside=False)
+    assert is_unknown(all_true)
+    assert not is_unknown(group_only)
