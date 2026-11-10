@@ -38,3 +38,13 @@ def test_pick_main_largest_above_min_area():
 
 def test_scan_crop_centered_square():
     assert scan_crop(1280, 720, ratio=0.7) == (388, 108, 504)
+
+
+from src.evaluate import mission_passed
+
+def test_mission_passed_needs_target_class_as_main_box():
+    big_sock = dict(x1=0, y1=0, x2=200, y2=200, score=0.8, cls=7)
+    big_shoe = dict(x1=0, y1=0, x2=250, y2=250, score=0.9, cls=8)
+    assert mission_passed([big_sock], target=7, input_size=320, min_area=0.15)
+    assert not mission_passed([big_sock, big_shoe], target=7, input_size=320, min_area=0.15)  # 더 큰 게 신발
+    assert not mission_passed([], target=7, input_size=320, min_area=0.15)
