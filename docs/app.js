@@ -1,6 +1,6 @@
 // docs/app.js — 카메라 → 스캔 틀 → ONNX 추론 → 미션 판정 → 알람 해제
-import { CLASSES } from './classes.js';
-import { decode, nms, pickMain, scanCrop, Streak, applyConf, minConf } from './postprocess.js';
+import { CLASSES } from './classes.js?v=20261110b';
+import { decode, nms, pickMain, scanCrop, Streak, applyConf, minConf } from './postprocess.js?v=20261110b';
 
 // ── 설정 (src/evaluate.py와 같은 값) ──
 const INPUT = 320, CONF = 0.5, IOU = 0.45, MIN_SIDE = 0.4, SCAN_RATIO = 0.7;
