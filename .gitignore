@@ -8,3 +8,4 @@ __pycache__/
 .DS_Store
 runs_quick/
 full_run.log
+clean_run.log
