@@ -15,14 +15,18 @@ def load_split(split: str, per_class: int, seed: int = 51) -> fo.Dataset:
     """클래스마다 따로 받아(per_class장) 하나로 합친다. 같은 사진은 한 번만 들어간다."""
     name = f"wakeup-{split}-{per_class}"
     if fo.dataset_exists(name):
-        return fo.load_dataset(name)
-    merged = fo.Dataset(name, persistent=True)
+        ds = fo.load_dataset(name)
+        if ds.persistent:                   # 끝까지 합쳐진 것만 재사용
+            return ds
+        ds.delete()                         # 같은 커널에서 중단된 반쪽짜리
+    merged = fo.Dataset(name)               # 다 합친 뒤에만 persistent → 중단되면 다음에 처음부터
     for c in C.CLASSES:
         part = foz.load_zoo_dataset(
             "open-images-v7", split=split, label_types=["detections"],
             classes=list(c.oi_labels), max_samples=per_class, seed=seed, shuffle=True,
             dataset_name=f"oi-{split}-{c.key}-{per_class}")
         merged.merge_samples(part)          # filepath 기준으로 합침 (중복 제거)
+    merged.persistent = True
     return merged
 
 
