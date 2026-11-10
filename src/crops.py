@@ -167,12 +167,15 @@ def export_full(records, out_dir, split, max_side=640):
 
 
 def export_crops(records, out_dir, split, seed=0, n_per_class=None, neg_per_image=3, fixed_fill=None,
-                 min_area=MIN_AREA, size=SIZE, table_name=None, keys=None):
+                 min_area=MIN_AREA, size=SIZE, table_name=None, keys=None, pos=True, neg=True,
+                 pos_per_class=None):
     """기록마다 crop을 만들어 out_dir/images/<split>, labels/<split>에 저장하고 표를 돌려준다.
     - 목표 박스(면적 ≥ min_area)마다 n_per_class.get(cls, 1)장
     - 네거티브 박스(면적 ≥ min_area) 중 큰 것부터 neg_per_image개, 각 1장
     표 열: file, image, kind(pos/neg), target(목표 클래스, neg는 -1), center(클래스 키 또는 네거티브 라벨), n_rows, half
-    끝나면 labels/<split>.done + crops.csv (다음엔 표만 읽음)."""
+    pos_per_class: 사진 한 장에서 클래스마다 큰 박스부터 이 개수만 중심으로 씀 (None = 모두; 책장처럼 박스가 많은 사진이 crop을 독차지하지 않게).
+    pos/neg=False면 그 종류의 박스는 crop 중심으로 쓰지 않는다 (라벨 계산에는 목표 박스를 늘 씀).
+    끝나면 labels/<split>.done + <split>_crops.csv (다음엔 표만 읽음)."""
     import cv2
     out_dir = Path(out_dir)
     done = out_dir / "labels" / f"{split}.done"
@@ -185,8 +188,11 @@ def export_crops(records, out_dir, split, seed=0, n_per_class=None, neg_per_imag
     rows_out = []
     for r in records:
         stem = Path(r["filepath"]).stem
-        big_t = [t for t in r["targets"] if t[3] * t[4] >= min_area]
-        big_n = sorted([n for n in r["negs"] if n[3] * n[4] >= min_area], key=lambda n: -n[3] * n[4])[:neg_per_image]
+        big_t = [t for t in r["targets"] if t[3] * t[4] >= min_area] if pos else []
+        if pos_per_class is not None:
+            big_t = sorted(big_t, key=lambda t: -t[3] * t[4])
+            big_t = [t for i, t in enumerate(big_t) if sum(u[0] == t[0] for u in big_t[:i]) < pos_per_class]
+        big_n = sorted([n for n in r["negs"] if n[3] * n[4] >= min_area], key=lambda n: -n[3] * n[4])[:neg_per_image] if neg else []
         if not big_t and not big_n:
             continue
         img = cv2.imread(r["filepath"])

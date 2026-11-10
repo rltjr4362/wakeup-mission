@@ -114,3 +114,18 @@ def test_link_split_merges(tmp_path):
         (tmp_path / d / "labels/train" / f"{name}.txt").write_text("")
     assert link_split([tmp_path / "a", tmp_path / "b"], tmp_path / "m", "train") == 2
     assert sorted(p.name for p in (tmp_path / "m/images/train").iterdir()) == ["x.jpg", "y.jpg"]
+
+
+def test_export_crops_neg_only_keeps_target_rows(tmp_path):
+    fp = _img(tmp_path, "a")
+    recs = [dict(filepath=fp, targets=[(0, 0.55, 0.55, 0.1, 0.1)], negs=[("Laptop", 0.5, 0.5, 0.3, 0.3)])]
+    df = export_crops(recs, tmp_path / "ev", "neg", pos=False, fixed_fill=0.6)
+    assert df["kind"].tolist() == ["neg"] and df["n_rows"].tolist() == [1]    # 노트북 속 마우스가 crop 안에 있음
+
+
+def test_export_crops_pos_per_class_keeps_largest_per_class(tmp_path):
+    fp = _img(tmp_path, "a")
+    recs = [dict(filepath=fp, negs=[], targets=[(2, 0.0, 0.0, 0.2, 0.2), (2, 0.5, 0.5, 0.3, 0.3),
+                                                (2, 0.3, 0.3, 0.1, 0.1), (7, 0.7, 0.1, 0.2, 0.2)])]
+    df = export_crops(recs, tmp_path / "c", "train", pos_per_class=1, n_per_class={2: 3})
+    assert sorted(df["target"].tolist()) == [2, 2, 2, 7]
