@@ -1,5 +1,6 @@
 # tests/test_data.py
-from src.data import dedupe_rows, dedupe_labels
+from src import config as C
+from src.data import dedupe_rows, dedupe_labels, label_counts
 
 
 def test_dedupe_rows_drops_same_class_overlap_keeps_order():
@@ -23,3 +24,17 @@ def test_dedupe_labels_rewrites_files(tmp_path):
     removed = dedupe_labels(tmp_path, "train")
     assert removed == 1
     assert (lab / "a.txt").read_text() == "8 0.500000 0.500000 0.400000 0.400000\n9 0.200000 0.200000 0.100000 0.100000\n"
+
+
+def test_label_counts_reads_label_files(tmp_path):
+    lab = tmp_path / "labels" / "val"
+    lab.mkdir(parents=True)
+    (lab / "a.txt").write_text("0 0.5 0.5 0.4 0.4\n0 0.1 0.1 0.1 0.1\n3 0.2 0.2 0.1 0.1\n")
+    (lab / "b.txt").write_text("3 0.5 0.5 0.4 0.4\n\n")
+    (lab / "c.txt").write_text("")
+    df = label_counts(tmp_path, "val").set_index("id")
+    assert list(df.columns) == ["사진", "박스"]
+    assert len(df) == len(C.CLASSES)
+    assert df.loc[0].tolist() == [1, 2]
+    assert df.loc[3].tolist() == [2, 2]
+    assert df.loc[1].tolist() == [0, 0]

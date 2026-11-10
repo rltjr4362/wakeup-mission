@@ -44,7 +44,7 @@ EPOCHS = 2 if QUICK else 50
 DEVICE = 'mps' if torch.backends.mps.is_available() else 'cpu'
 DATA = ROOT / 'data'
 YOLO_DIR = DATA / ('yolo_quick' if QUICK else 'yolo')
-RUNS = ROOT / 'runs'
+RUNS = ROOT / ('runs_quick' if QUICK else 'runs')   # QUICK 결과가 본 학습 결과를 덮지 않게
 plt.rcParams['font.family'] = 'AppleGothic'; plt.rcParams['axes.unicode_minus'] = False
 print('device:', DEVICE, '| QUICK:', QUICK)
 """)
@@ -62,17 +62,22 @@ views = {}
 for split, yolo_split in [('train', 'train'), ('validation', 'val')]:
     ds = D.load_split(split, PER_CLASS[split])
     views[yolo_split] = D.to_mission_view(ds)
-    if not (YOLO_DIR / 'labels' / yolo_split).exists():
+    done = YOLO_DIR / 'labels' / f'{yolo_split}.done'   # 내보내기 + 겹친 박스 제거가 끝까지 됐다는 표시
+    if not done.exists():
+        for sub in ('images', 'labels'):                 # 중단된 내보내기가 남긴 반쪽 폴더는 지우고 다시
+            shutil.rmtree(YOLO_DIR / sub / yolo_split, ignore_errors=True)
         D.export_yolo(views[yolo_split], YOLO_DIR, yolo_split)
         print(yolo_split, '겹친 박스 제거:', D.dedupe_labels(YOLO_DIR, yolo_split))
+        done.touch()
 YAML = YOLO_DIR / 'dataset.yaml'
 print(YAML.read_text())
 """)
 
-md("## 3. 데이터 살펴보기")
+md("## 3. 데이터 살펴보기\n\n개수는 **내보낸 라벨 파일**(겹친 박스를 지운 뒤, 실제 학습에 쓰는 것) 기준이다.")
 code("""
-tables = {s: D.count_table(v).set_index('id') for s, v in views.items()}
-summary = tables['train'][['클래스', '구분']].copy()
+tables = {s: D.label_counts(YOLO_DIR, s).set_index('id') for s in views}
+summary = pd.DataFrame([dict(id=c.id, 클래스=c.ko, 구분='기존(COCO)' if c.coco_id is not None else '새로')
+                        for c in C.CLASSES]).set_index('id')
 summary['train 사진'] = tables['train']['사진']; summary['train 박스'] = tables['train']['박스']
 summary['val 사진'] = tables['val']['사진'];     summary['val 박스'] = tables['val']['박스']
 summary
@@ -162,12 +167,14 @@ code("""
 EXPS = {'A_full': dict(freeze=None), 'B_freeze10': dict(freeze=10)}
 train_time = {}
 for name, extra in EXPS.items():
-    if (RUNS / name / 'weights' / 'best.pt').exists() and not QUICK:
+    done = RUNS / name / 'done'          # 학습이 끝까지 돌았다는 표시 (중단된 학습의 best.pt는 재사용하지 않음)
+    if done.exists():
         print(name, '이미 학습됨 → 건너뜀'); continue
     t0 = time.time()
     YOLO('yolo11n.pt').train(data=str(YAML), epochs=EPOCHS, imgsz=640, batch=16, patience=10,
                              device=DEVICE, project=str(RUNS), name=name, exist_ok=True,
                              seed=0, workers=4, plots=True, **extra)
+    done.touch()
     train_time[name] = time.time() - t0
 train_time
 """)
@@ -253,13 +260,16 @@ shutil.copy(onnx_path, DOCS / 'model.onnx')
 print('docs/model.onnx', round((DOCS / 'model.onnx').stat().st_size / 1e6, 1), 'MB')
 """)
 
-md("## 9. 직접 찍은 사진으로 미션 통과율\n\n`my_photos/<클래스키>/*.jpg` 에 사진을 넣는다 (예: `my_photos/sock/1.jpg`). 웹앱과 **같은 규칙**(가운데 틀 · 면적 15% · 신뢰도 0.5)으로 판정한다.")
+md("## 9. 직접 찍은 사진으로 미션 통과율\n\n`my_photos/<클래스키>/*.jpg` 에 사진을 넣는다 (예: `my_photos/sock/1.jpg`, JPG·PNG, HEIC는 변환 필요). 웹앱과 **같은 규칙**(가운데 틀 · 면적 15% · 신뢰도 0.5)으로 판정한다. 틀은 사진 짧은 변 × 0.7로 웹앱(보이는 화면 기준)의 근사이므로, 물건을 **가운데에 크게** 찍는다.")
 code("""
 PHOTOS = ROOT / 'my_photos'
-if PHOTOS.exists() and any(PHOTOS.rglob('*.jpg')):
+if PHOTOS.exists() and any(p.suffix.lower() in E.PHOTO_SUFFIXES for p in PHOTOS.rglob('*')):
     mine = E.my_photos_table(sess, PHOTOS)
-    display(mine.groupby('미션')['통과'].agg(['mean', 'count']).rename(columns={'mean': '통과율', 'count': '장수'}))
-    display(mine[~mine['통과']])
+    if mine.empty:
+        print('읽을 수 있는 사진이 없어요. my_photos/<클래스키>/ 아래에 JPG/PNG를 넣으세요.')
+    else:
+        display(mine.groupby('미션')['통과'].agg(['mean', 'count']).rename(columns={'mean': '통과율', 'count': '장수'}))
+        display(mine[~mine['통과']])
 else:
     print('my_photos/ 에 사진을 넣고 다시 실행하세요.')
 """)

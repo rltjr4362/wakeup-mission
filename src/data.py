@@ -77,6 +77,20 @@ def dedupe_labels(yolo_dir: Path, split: str, iou_thres=0.7) -> int:
     return removed
 
 
+def label_counts(yolo_dir: Path, split: str):
+    """내보낸(겹친 박스 제거 후) labels/{split}/*.txt 기준 클래스별 사진 수 · 박스 수. 열: id, 사진, 박스"""
+    import pandas as pd
+    imgs = {c.id: 0 for c in C.CLASSES}
+    boxes = {c.id: 0 for c in C.CLASSES}
+    for lab in (yolo_dir / "labels" / split).glob("*.txt"):
+        ks = [int(line.split()[0]) for line in lab.read_text().splitlines() if line.strip()]
+        for k in ks:
+            boxes[k] += 1
+        for k in set(ks):
+            imgs[k] += 1
+    return pd.DataFrame([dict(id=i, 사진=imgs[i], 박스=boxes[i]) for i in imgs])
+
+
 def count_table(view):
     """클래스별 사진 수 · 박스 수 (pandas DataFrame)."""
     import pandas as pd
