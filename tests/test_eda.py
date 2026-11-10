@@ -81,3 +81,16 @@ def test_cooccurrence_counts_images_with_both():
     assert m.loc["shoe", "shoe"] == 2                           # 대각선 = 그 클래스가 있는 사진 수
     assert m.loc["door", "shoe"] == 0
     assert list(m.index) == list(m.columns) and len(m) == 10
+
+
+def test_box_table_marks_unknown_attrs():
+    # Open Images CSV의 -1(모름)은 FiftyOne에서 다섯 속성이 모두 True로 들어온다 → attr_unknown
+    all_true = dict(IsGroupOf=True, IsDepiction=True, IsOccluded=True, IsTruncated=True, IsInside=True)
+    views = {"train": [_sample("d.jpg", 100, 100, [
+        _det("toothbrush", [0.2, 0.2, 0.5, 0.5], **all_true),
+        _det("toothbrush", [0.2, 0.2, 0.5, 0.5], IsGroupOf=True, IsDepiction=True),
+    ])]}
+    df = box_table(views)
+    assert df["attr_unknown"].dtype == bool
+    assert list(df["attr_unknown"]) == [True, False]
+    assert list(df["drop"]) == [True, True]          # drop은 실험 C 규칙 그대로 (모름도 지움)

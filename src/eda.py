@@ -17,6 +17,8 @@ def _box_row(split, sample, d, min_area):
                cx=x + w / 2, cy=y + h / 2)
     for a in ATTRS:
         row[a] = _flag(getattr(d, a, None))                 # None · 없음 → False
+    # Open Images CSV의 -1(= 모름)을 FiftyOne은 True로 읽는다 → 다섯 속성이 모두 True면 사실은 "모름"
+    row["attr_unknown"] = all(row[a] for a in ATTRS)
     row["drop"] = should_drop(row["IsGroupOf"], row["IsDepiction"], row["area"], min_area)
     return row
 
@@ -32,7 +34,7 @@ def box_table(views: dict, min_area=0.01) -> pd.DataFrame:
                 if d.label in C.BY_KEY:
                     rows.append(_box_row(split, sample, d, min_area))
     df = pd.DataFrame(rows)
-    for col in ATTRS + ["drop"]:
+    for col in ATTRS + ["attr_unknown", "drop"]:
         df[col] = df[col].astype(bool)
     return df
 
