@@ -9,3 +9,4 @@ __pycache__/
 runs_quick/
 full_run.log
 clean_run.log
+clean_run2.log
